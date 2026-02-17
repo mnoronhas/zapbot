@@ -10,7 +10,10 @@ import {
   pgEnum,
   index,
   uniqueIndex,
+  pgPolicy,
 } from "drizzle-orm/pg-core";
+import { authenticatedRole } from "drizzle-orm/supabase";
+import { sql } from "drizzle-orm";
 
 // =============================================================================
 // Enums
@@ -40,6 +43,17 @@ export const waConnectionStatusEnum = pgEnum("wa_connection_status", [
 ]);
 
 // =============================================================================
+// RLS Helpers
+// =============================================================================
+
+// Resolves the account_id for the currently authenticated Supabase user.
+// Used in RLS policies on all account_id-scoped tables.
+const myAccountId = sql`(
+  SELECT id FROM accounts
+  WHERE supabase_user_id = auth.uid()
+)`;
+
+// =============================================================================
 // Accounts (tenants)
 // =============================================================================
 
@@ -59,7 +73,13 @@ export const accounts = pgTable("accounts", {
 }, (table) => [
   uniqueIndex("accounts_email_idx").on(table.email),
   uniqueIndex("accounts_supabase_user_idx").on(table.supabaseUserId),
-]);
+  pgPolicy("accounts_tenant_isolation", {
+    for: "all",
+    to: authenticatedRole,
+    using: sql`supabase_user_id = auth.uid()`,
+    withCheck: sql`supabase_user_id = auth.uid()`,
+  }),
+]).enableRLS();
 
 // =============================================================================
 // WhatsApp Connections
@@ -80,7 +100,13 @@ export const whatsappConnections = pgTable("whatsapp_connections", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index("wa_connections_account_idx").on(table.accountId),
-]);
+  pgPolicy("wa_connections_tenant_isolation", {
+    for: "all",
+    to: authenticatedRole,
+    using: sql`account_id = ${myAccountId}`,
+    withCheck: sql`account_id = ${myAccountId}`,
+  }),
+]).enableRLS();
 
 // =============================================================================
 // Bots
@@ -100,7 +126,13 @@ export const bots = pgTable("bots", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index("bots_account_idx").on(table.accountId),
-]);
+  pgPolicy("bots_tenant_isolation", {
+    for: "all",
+    to: authenticatedRole,
+    using: sql`account_id = ${myAccountId}`,
+    withCheck: sql`account_id = ${myAccountId}`,
+  }),
+]).enableRLS();
 
 // =============================================================================
 // Bot Versions (for rollback)
@@ -117,7 +149,19 @@ export const botVersions = pgTable("bot_versions", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index("bot_versions_bot_idx").on(table.botId),
-]);
+  pgPolicy("bot_versions_tenant_isolation", {
+    for: "all",
+    to: authenticatedRole,
+    using: sql`bot_id IN (
+      SELECT id FROM bots
+      WHERE account_id = ${myAccountId}
+    )`,
+    withCheck: sql`bot_id IN (
+      SELECT id FROM bots
+      WHERE account_id = ${myAccountId}
+    )`,
+  }),
+]).enableRLS();
 
 // =============================================================================
 // Calendar Configs
@@ -144,7 +188,13 @@ export const calendarConfigs = pgTable("calendar_configs", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index("calendar_configs_account_idx").on(table.accountId),
-]);
+  pgPolicy("calendar_configs_tenant_isolation", {
+    for: "all",
+    to: authenticatedRole,
+    using: sql`account_id = ${myAccountId}`,
+    withCheck: sql`account_id = ${myAccountId}`,
+  }),
+]).enableRLS();
 
 // =============================================================================
 // Conversations
@@ -172,7 +222,13 @@ export const conversations = pgTable("conversations", {
   index("conversations_bot_idx").on(table.botId),
   index("conversations_phone_idx").on(table.contactPhone),
   index("conversations_status_idx").on(table.status),
-]);
+  pgPolicy("conversations_tenant_isolation", {
+    for: "all",
+    to: authenticatedRole,
+    using: sql`account_id = ${myAccountId}`,
+    withCheck: sql`account_id = ${myAccountId}`,
+  }),
+]).enableRLS();
 
 // =============================================================================
 // Messages
@@ -192,7 +248,19 @@ export const messages = pgTable("messages", {
 }, (table) => [
   index("messages_conversation_idx").on(table.conversationId),
   index("messages_wa_id_idx").on(table.waMessageId),
-]);
+  pgPolicy("messages_tenant_isolation", {
+    for: "all",
+    to: authenticatedRole,
+    using: sql`conversation_id IN (
+      SELECT id FROM conversations
+      WHERE account_id = ${myAccountId}
+    )`,
+    withCheck: sql`conversation_id IN (
+      SELECT id FROM conversations
+      WHERE account_id = ${myAccountId}
+    )`,
+  }),
+]).enableRLS();
 
 // =============================================================================
 // Appointments
@@ -222,7 +290,13 @@ export const appointments = pgTable("appointments", {
   index("appointments_start_idx").on(table.startTime),
   index("appointments_status_idx").on(table.status),
   index("appointments_phone_idx").on(table.patientPhone),
-]);
+  pgPolicy("appointments_tenant_isolation", {
+    for: "all",
+    to: authenticatedRole,
+    using: sql`account_id = ${myAccountId}`,
+    withCheck: sql`account_id = ${myAccountId}`,
+  }),
+]).enableRLS();
 
 // =============================================================================
 // Analytics Events (lightweight event tracking)
@@ -245,4 +319,10 @@ export const analyticsEvents = pgTable("analytics_events", {
   index("analytics_account_idx").on(table.accountId),
   index("analytics_event_type_idx").on(table.eventType),
   index("analytics_created_idx").on(table.createdAt),
-]);
+  pgPolicy("analytics_events_tenant_isolation", {
+    for: "all",
+    to: authenticatedRole,
+    using: sql`account_id = ${myAccountId}`,
+    withCheck: sql`account_id = ${myAccountId}`,
+  }),
+]).enableRLS();
