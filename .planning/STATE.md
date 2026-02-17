@@ -1,13 +1,13 @@
 # ZapBot — Project State
 
 ## Current Milestone: v1-mvp
-**Status**: Executing Phase 1 — Plans 01 and 02 complete
+**Status**: Executing Phase 1 — Plans 01, 02, and 03 complete
 
 ## Phase Progress
 
 | Phase | Name | Status | Plans |
 |-------|------|--------|-------|
-| 1 | Foundation — Database, Auth & Project Scaffold | In progress | 2/5 complete |
+| 1 | Foundation — Database, Auth & Project Scaffold | In progress | 3/5 complete |
 | 2 | Flow Editor — Visual Bot Builder | Not started | Not planned |
 | 3 | WhatsApp Connection & Webhook | Not started | Not planned |
 | 4 | Flow Execution Engine | Not started | Not planned |
@@ -17,7 +17,7 @@
 ## Progress (Phase 1 Plans)
 
 ```
-Phase 1: ████░░░░░░ 2/5 plans (40%)
+Phase 1: ██████░░░░ 3/5 plans (60%)
 Overall: Very early — only Phase 1 planned
 ```
 
@@ -36,6 +36,10 @@ Overall: Very early — only Phase 1 planned
 | DOM lib in web tsconfig | 01-02 | Root tsconfig is ES2022 only; browser app needs DOM types for window, etc. |
 | No Tailwind in Phase 1 frontend | 01-02 | User: "focus on backend first" — inline styles only for Phase 1 UI |
 | getUser() not getSession() in server-side code | 01-02 | getSession() doesn't verify JWT server-side — security requirement from research |
+| enableRLS() supported natively in drizzle-orm 0.45.1 | 01-03 | Research flagged uncertainty; verified as fully supported — no raw SQL workaround needed |
+| pgPolicy imported from drizzle-orm/pg-core | 01-03 | Exported via pg-core/policies.js; authenticatedRole from drizzle-orm/supabase |
+| myAccountId SQL helper at module scope | 01-03 | Single subquery reused across all account_id tables — DRY and consistent |
+| pnpm db:generate works without DATABASE_URL | 01-03 | drizzle-kit generate diffs schema against migration history only; only migrate needs live DB |
 
 ## Blockers / Concerns
 
@@ -46,9 +50,9 @@ Overall: Very early — only Phase 1 planned
 
 ## Session Continuity
 
-Last session: 2026-02-17T19:25:55Z
-Stopped at: Completed 01-02-PLAN.md (Next.js frontend scaffold with Supabase Auth)
-Resume file: None — proceed with 01-03-PLAN.md next
+Last session: 2026-02-17T19:34:33Z
+Stopped at: Completed 01-03-PLAN.md (RLS policies + initial database migration)
+Resume file: None — proceed with 01-04-PLAN.md next
 
 ---
 *Updated: 2026-02-17*
