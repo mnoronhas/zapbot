@@ -1,0 +1,29 @@
+{
+  "name": "@zapbot/engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@zapbot/flow-schema": "workspace:*",
+    "@zapbot/whatsapp": "workspace:*",
+    "@zapbot/calendar": "workspace:*",
+    "@zapbot/db": "workspace:*",
+    "fastify": "^5.0.0",
+    "@fastify/cors": "^10.0.0",
+    "drizzle-orm": "^0.33.0",
+    "postgres": "^3.4.0",
+    "zod": "^3.23.0",
+    "dotenv": "^16.4.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  }
+}

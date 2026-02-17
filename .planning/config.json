@@ -1,0 +1,22 @@
+{
+  "project": "zapbot",
+  "version": "1.0.0",
+  "created": "2026-02-17",
+  "workflow": {
+    "research_before_planning": true,
+    "verify_after_execution": true,
+    "atomic_commits": true,
+    "parallel_agents": true
+  },
+  "preferences": {
+    "language": "pt-BR",
+    "code_language": "typescript",
+    "commit_style": "conventional",
+    "timeline": "fast",
+    "approach": "prototype-speed"
+  },
+  "milestone": {
+    "current": "v1-mvp",
+    "label": "MVP — Full Flow Editor + Engine + Scheduling"
+  }
+}
