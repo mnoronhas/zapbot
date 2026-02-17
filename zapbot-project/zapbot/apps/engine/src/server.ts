@@ -1,6 +1,8 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import "dotenv/config";
+import accountRoutes from "./routes/account.js";
+import botRoutes from "./routes/bots.js";
 
 const app = Fastify({ logger: true });
 
@@ -9,12 +11,12 @@ await app.register(cors, {
 });
 
 // ---------------------------------------------------------------------------
-// Health check
+// Health check — unauthenticated
 // ---------------------------------------------------------------------------
 app.get("/health", async () => ({ status: "ok", timestamp: new Date().toISOString() }));
 
 // ---------------------------------------------------------------------------
-// WhatsApp Webhook — Verification (GET)
+// WhatsApp Webhook — Verification (GET) — unauthenticated
 // ---------------------------------------------------------------------------
 app.get("/webhooks/whatsapp", async (request, reply) => {
   const query = request.query as Record<string, string>;
@@ -37,7 +39,7 @@ app.get("/webhooks/whatsapp", async (request, reply) => {
 });
 
 // ---------------------------------------------------------------------------
-// WhatsApp Webhook — Incoming Messages (POST)
+// WhatsApp Webhook — Incoming Messages (POST) — unauthenticated
 // ---------------------------------------------------------------------------
 app.post("/webhooks/whatsapp", async (request, reply) => {
   // Always return 200 immediately to prevent Meta retries
@@ -57,23 +59,20 @@ app.post("/webhooks/whatsapp", async (request, reply) => {
 });
 
 // ---------------------------------------------------------------------------
-// API Routes (for the frontend)
+// API Routes — authenticated via requireAuth middleware in each route plugin
 // ---------------------------------------------------------------------------
-
-// TODO: Mount API routes
-// app.register(botRoutes, { prefix: "/api/v1/bots" });
-// app.register(conversationRoutes, { prefix: "/api/v1/conversations" });
-// app.register(appointmentRoutes, { prefix: "/api/v1/appointments" });
-// app.register(analyticsRoutes, { prefix: "/api/v1/analytics" });
+await app.register(accountRoutes, { prefix: "/api/v1/account" });
+await app.register(botRoutes, { prefix: "/api/v1/bots" });
 
 // ---------------------------------------------------------------------------
 // Start
+// PORT is used on Railway; ENGINE_PORT for local dev
+// host "::" binds to all interfaces (IPv4 + IPv6), required for Railway
 // ---------------------------------------------------------------------------
-
-const port = parseInt(process.env.ENGINE_PORT || "4000", 10);
+const port = parseInt(process.env.PORT || process.env.ENGINE_PORT || "4000", 10);
 
 try {
-  await app.listen({ port, host: "0.0.0.0" });
+  await app.listen({ port, host: "::" });
   app.log.info(`ZapBot engine running on port ${port}`);
 } catch (err) {
   app.log.error(err);
