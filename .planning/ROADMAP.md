@@ -11,6 +11,15 @@
 
 **Requirements covered**: FR-01 (Account System), NFR-01.1-01.2 (Auth + RLS), NFR-05 (Deployment scaffold)
 
+**Plans:** 5 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — DB foundation: drizzle.config.ts, dual clients, encryption utility
+- [ ] 01-02-PLAN.md — Next.js scaffold with Supabase Auth (login, register, dashboard)
+- [ ] 01-03-PLAN.md — RLS policies on all tenant-scoped tables + migration generation
+- [ ] 01-04-PLAN.md — Auth middleware (jose JWKS) + API routes (/account, /bots)
+- [ ] 01-05-PLAN.md — Integration: account trigger, dashboard wiring, end-to-end verification
+
 **Deliverables**:
 - Set up frontend project (React + Vite or Next.js — minimal) with PT-BR shell
 - Supabase Auth integration (registration, login, Google OAuth)
@@ -51,7 +60,7 @@
 - Store encrypted WhatsApp credentials in `whatsapp_connections` table
 - Webhook endpoint (`POST /webhooks/whatsapp`) with HMAC-SHA256 signature verification
 - Webhook verification endpoint (`GET /webhooks/whatsapp`) for Meta challenge
-- Route incoming messages to the correct bot (by phone number → account → published bot)
+- Route incoming messages to the correct bot (by phone number -> account -> published bot)
 - Idempotent message processing (track `message_id` to prevent duplicate handling)
 - Send text and button messages via WhatsApp Cloud API
 
@@ -77,7 +86,7 @@
 - Variable store per session (`{nome_paciente}`, `{data_consulta}`, etc.)
 - Session timeout handling (reset after inactivity)
 
-**Exit criteria**: A complete conversation flow runs end-to-end via WhatsApp — greeting → buttons → collect name → condition → handoff — with all variables substituted correctly.
+**Exit criteria**: A complete conversation flow runs end-to-end via WhatsApp — greeting -> buttons -> collect name -> condition -> handoff — with all variables substituted correctly.
 
 ---
 
@@ -89,7 +98,7 @@
 **Deliverables**:
 - Google Calendar OAuth setup UI (connect calendar, select which calendar)
 - Schedule configuration (working days, hours, slot duration, buffer time)
-- Real-time availability: FreeBusy API → generate available slots
+- Real-time availability: FreeBusy API -> generate available slots
 - Present time slots to user via WhatsApp buttons
 - Create Google Calendar event on confirmation
 - Send appointment confirmation message with details
@@ -111,7 +120,7 @@
 - Error handling polish (user-friendly error messages in PT-BR)
 - Loading states and empty states throughout the UI
 - Mobile-responsive layout adjustments
-- Basic onboarding flow (guide new user through: create bot → connect WhatsApp → publish)
+- Basic onboarding flow (guide new user through: create bot -> connect WhatsApp -> publish)
 
 **Exit criteria**: A new user can sign up, create a bot, connect WhatsApp, connect Google Calendar, publish, and see conversations + appointments in the dashboard. The full loop works.
 
