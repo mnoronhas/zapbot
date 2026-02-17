@@ -31,6 +31,13 @@ const styles = {
     boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
     marginBottom: "1rem",
   },
+  sectionTitle: {
+    fontSize: "1.125rem",
+    fontWeight: "600",
+    color: "#1a1a1a",
+    marginTop: 0,
+    marginBottom: "1rem",
+  },
   info: {
     color: "#374151",
     fontSize: "0.875rem",
@@ -48,15 +55,97 @@ const styles = {
     fontSize: "0.875rem",
     fontFamily: "monospace",
   },
-  placeholder: {
-    backgroundColor: "#f0fdf4",
-    border: "1px solid #86efac",
-    color: "#166534",
-    padding: "1.5rem",
+  warning: {
+    backgroundColor: "#fffbeb",
+    border: "1px solid #fbbf24",
+    color: "#92400e",
+    padding: "1rem",
     borderRadius: "8px",
     fontSize: "0.875rem",
+    marginBottom: "1rem",
+  },
+  emptyState: {
+    color: "#6b7280",
+    fontSize: "0.875rem",
+    fontStyle: "italic",
+  },
+  badge: {
+    display: "inline-block",
+    padding: "0.25rem 0.75rem",
+    borderRadius: "9999px",
+    fontSize: "0.75rem",
+    fontWeight: "600",
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.05em",
   },
 };
+
+type AccountData = {
+  id: string;
+  email: string;
+  businessName: string;
+  businessPhone: string | null;
+  businessType: string | null;
+  plan: string;
+  status: string;
+  createdAt: string;
+};
+
+type BotData = {
+  id: string;
+  name: string;
+  status: string;
+  version: number;
+  createdAt: string;
+};
+
+function formatDate(dateStr: string): string {
+  try {
+    return new Date(dateStr).toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    });
+  } catch {
+    return dateStr;
+  }
+}
+
+function planLabel(plan: string): string {
+  const labels: Record<string, string> = {
+    free: "Gratuito",
+    professional: "Profissional",
+    clinic_plus: "Clinica+",
+  };
+  return labels[plan] || plan;
+}
+
+function statusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    active: "Ativo",
+    suspended: "Suspenso",
+    cancelled: "Cancelado",
+  };
+  return labels[status] || status;
+}
+
+function statusColor(status: string): string {
+  const colors: Record<string, string> = {
+    active: "#166534",
+    suspended: "#92400e",
+    cancelled: "#991b1b",
+  };
+  return colors[status] || "#374151";
+}
+
+function statusBg(status: string): string {
+  const bgs: Record<string, string> = {
+    active: "#f0fdf4",
+    suspended: "#fffbeb",
+    cancelled: "#fef2f2",
+  };
+  return bgs[status] || "#f5f5f5";
+}
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -68,29 +157,188 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
+  // Get session to access the JWT for engine API calls.
+  // Safe here because we already verified the user above with getUser().
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  let account: AccountData | null = null;
+  let accountError: string | null = null;
+  let botsList: BotData[] = [];
+  let botsError: string | null = null;
+
+  if (session?.access_token) {
+    const engineUrl = process.env.ENGINE_URL || "http://localhost:4000";
+
+    // Fetch account data from the engine API
+    try {
+      const accountRes = await fetch(`${engineUrl}/api/v1/account`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        cache: "no-store",
+      });
+      if (accountRes.ok) {
+        const json = await accountRes.json();
+        account = json.data;
+      } else {
+        accountError = `Erro ao carregar dados da conta (status ${accountRes.status})`;
+      }
+    } catch {
+      accountError =
+        "Nao foi possivel conectar ao servidor. Verifique se o engine esta rodando na porta 4000.";
+    }
+
+    // Fetch bots list from the engine API
+    try {
+      const botsRes = await fetch(`${engineUrl}/api/v1/bots`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        cache: "no-store",
+      });
+      if (botsRes.ok) {
+        const json = await botsRes.json();
+        botsList = json.data || [];
+      } else {
+        botsError = `Erro ao carregar bots (status ${botsRes.status})`;
+      }
+    } catch {
+      botsError = "Nao foi possivel carregar a lista de bots.";
+    }
+  } else {
+    accountError = "Sessao expirada. Faca login novamente.";
+  }
+
   return (
     <div style={styles.container}>
+      {/* Header */}
       <div style={styles.header}>
         <h1 style={styles.title}>Painel</h1>
         <LogoutButton />
       </div>
 
+      {/* API connection warning */}
+      {accountError && <div style={styles.warning}>{accountError}</div>}
+
+      {/* Account data card */}
       <div style={styles.card}>
-        <div style={styles.info}>
-          <p style={styles.label}>Logado como</p>
-          <p style={styles.value}>{user.email}</p>
-        </div>
-        <div style={styles.info}>
-          <p style={styles.label}>User ID</p>
-          <p style={styles.value}>{user.id}</p>
-        </div>
+        <h2 style={styles.sectionTitle}>Dados da conta</h2>
+
+        {account ? (
+          <>
+            <div style={styles.info}>
+              <p style={styles.label}>Nome da empresa:</p>
+              <p style={styles.value}>{account.businessName}</p>
+            </div>
+            <div style={styles.info}>
+              <p style={styles.label}>E-mail:</p>
+              <p style={styles.value}>{account.email}</p>
+            </div>
+            <div style={styles.info}>
+              <p style={styles.label}>Plano:</p>
+              <p style={styles.value}>{planLabel(account.plan)}</p>
+            </div>
+            <div style={styles.info}>
+              <p style={styles.label}>Status:</p>
+              <span
+                style={{
+                  ...styles.badge,
+                  color: statusColor(account.status),
+                  backgroundColor: statusBg(account.status),
+                }}
+              >
+                {statusLabel(account.status)}
+              </span>
+            </div>
+            <div style={{ ...styles.info, marginBottom: 0 }}>
+              <p style={styles.label}>Membro desde:</p>
+              <p style={styles.value}>{formatDate(account.createdAt)}</p>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Fallback: show Supabase user info if engine API is unavailable */}
+            <div style={styles.info}>
+              <p style={styles.label}>E-mail:</p>
+              <p style={styles.value}>{user.email}</p>
+            </div>
+            <div style={styles.info}>
+              <p style={styles.label}>User ID:</p>
+              <p style={styles.value}>{user.id}</p>
+            </div>
+          </>
+        )}
       </div>
 
-      <div style={styles.placeholder}>
-        <strong>Bem-vindo ao ZapBot!</strong>
-        <p style={{ marginTop: "0.5rem" }}>
-          O painel sera construido nas proximas fases. Por agora, a autenticacao esta funcionando.
-        </p>
+      {/* Bots card */}
+      <div style={styles.card}>
+        <h2 style={styles.sectionTitle}>Seus bots</h2>
+
+        {botsError && (
+          <div style={{ ...styles.warning, marginBottom: "0.5rem" }}>
+            {botsError}
+          </div>
+        )}
+
+        {botsList.length > 0 ? (
+          botsList.map((bot) => (
+            <div
+              key={bot.id}
+              style={{
+                padding: "0.75rem",
+                borderBottom: "1px solid #e5e7eb",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <div>
+                <p
+                  style={{
+                    margin: 0,
+                    fontWeight: "500",
+                    color: "#1a1a1a",
+                    fontSize: "0.875rem",
+                  }}
+                >
+                  {bot.name}
+                </p>
+                <p
+                  style={{
+                    margin: 0,
+                    color: "#6b7280",
+                    fontSize: "0.75rem",
+                  }}
+                >
+                  v{bot.version} &middot; {formatDate(bot.createdAt)}
+                </p>
+              </div>
+              <span
+                style={{
+                  ...styles.badge,
+                  color:
+                    bot.status === "published"
+                      ? "#166534"
+                      : bot.status === "paused"
+                        ? "#92400e"
+                        : "#374151",
+                  backgroundColor:
+                    bot.status === "published"
+                      ? "#f0fdf4"
+                      : bot.status === "paused"
+                        ? "#fffbeb"
+                        : "#f5f5f5",
+                }}
+              >
+                {bot.status === "published"
+                  ? "Publicado"
+                  : bot.status === "paused"
+                    ? "Pausado"
+                    : "Rascunho"}
+              </span>
+            </div>
+          ))
+        ) : (
+          <p style={styles.emptyState}>Nenhum bot criado ainda.</p>
+        )}
       </div>
     </div>
   );
