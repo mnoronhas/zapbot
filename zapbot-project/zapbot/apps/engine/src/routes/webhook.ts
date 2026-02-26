@@ -1,118 +1,87 @@
 /**
- * WhatsApp Webhook Routes — Fastify plugin.
+ * Evolution API Webhook Routes — Fastify plugin.
  *
- * Handles Meta webhook verification (GET) and incoming messages (POST).
- * Uses a custom content-type parser to capture the raw body for HMAC
- * signature verification while still parsing JSON for route handlers.
+ * Handles incoming messages (MESSAGES_UPSERT) and connection updates
+ * (CONNECTION_UPDATE) from Evolution API.
  */
 
 import type { FastifyPluginAsync } from "fastify";
 import {
-  WhatsAppClient,
-  type WebhookEntry,
-  type IncomingMessage,
+  EvolutionClient,
+  type EvolutionWebhookPayload,
+  type EvolutionConnectionData,
 } from "@zapbot/whatsapp";
+import { adminDb, whatsappConnections } from "@zapbot/db";
+import { eq } from "drizzle-orm";
 import { handleIncomingMessage } from "../services/message-handler.js";
 
 const webhookRoutes: FastifyPluginAsync = async (app) => {
   // -------------------------------------------------------------------------
-  // Raw body parser — capture raw bytes for HMAC, then parse JSON.
-  // Scoped to this plugin only (Fastify encapsulation).
-  // -------------------------------------------------------------------------
-  app.addContentTypeParser(
-    "application/json",
-    { parseAs: "buffer" },
-    (_req, body, done) => {
-      // Store raw body for signature verification
-      (_req as unknown as { rawBody: Buffer }).rawBody = body as Buffer;
-      try {
-        const parsed = JSON.parse((body as Buffer).toString("utf-8"));
-        done(null, parsed);
-      } catch (err) {
-        done(err as Error, undefined);
-      }
-    },
-  );
-
-  // -------------------------------------------------------------------------
-  // GET / — Meta webhook verification challenge
-  // -------------------------------------------------------------------------
-  app.get("/", async (request, reply) => {
-    const query = request.query as Record<string, string>;
-    const verifyToken = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
-
-    if (!verifyToken) {
-      app.log.error("WHATSAPP_WEBHOOK_VERIFY_TOKEN not configured");
-      return reply.status(500).send("Server misconfiguration");
-    }
-
-    const result = WhatsAppClient.handleVerifyChallenge(
-      query["hub.mode"],
-      query["hub.verify_token"],
-      query["hub.challenge"],
-      verifyToken,
-    );
-
-    return reply.status(result.status).send(result.body);
-  });
-
-  // -------------------------------------------------------------------------
-  // POST / — Incoming messages from Meta
+  // POST / — Incoming events from Evolution API
   // -------------------------------------------------------------------------
   app.post("/", async (request, reply) => {
-    // Always return 200 immediately to prevent Meta retries
+    // Always return 200 immediately to prevent retries
     reply.status(200).send("EVENT_RECEIVED");
 
-    const rawBody = (request as unknown as { rawBody: Buffer }).rawBody;
-    const signature = request.headers["x-hub-signature-256"] as string | undefined;
+    const body = request.body as EvolutionWebhookPayload;
+    const event = body.event;
+    const instanceName = body.instance;
 
-    // Verify webhook signature if app secret is configured
-    const appSecret = process.env.WHATSAPP_APP_SECRET;
-    if (appSecret && rawBody && signature) {
-      const verifier = new WhatsAppClient({
-        phoneNumberId: "",
-        accessToken: "",
-        appSecret,
+    if (!event || !instanceName) return;
+
+    // -----------------------------------------------------------------------
+    // MESSAGES_UPSERT — Incoming user message
+    // -----------------------------------------------------------------------
+    if (event === "messages.upsert") {
+      const data = body.data;
+
+      // Skip messages sent by us
+      if (data.key?.fromMe) return;
+
+      const parsed = EvolutionClient.parseIncomingMessage(data);
+      if (!parsed) return;
+
+      handleIncomingMessage({
+        parsed,
+        instanceName,
+        contactName: data.pushName,
+        logger: app.log,
+      }).catch((err) => {
+        app.log.error(
+          { err, messageId: parsed.messageId, from: parsed.from },
+          "Unhandled error processing message",
+        );
       });
-
-      if (!verifier.verifyWebhookSignature(rawBody, signature)) {
-        app.log.warn("Invalid webhook signature — dropping payload");
-        return;
-      }
     }
 
-    // Extract and process messages from the webhook payload
-    const body = request.body as { object?: string; entry?: WebhookEntry[] };
+    // -----------------------------------------------------------------------
+    // CONNECTION_UPDATE — Instance connection state changed
+    // -----------------------------------------------------------------------
+    if (event === "connection.update") {
+      const connectionData = body.data as unknown as EvolutionConnectionData;
+      const state = connectionData.state;
 
-    if (body.object !== "whatsapp_business_account" || !body.entry) {
-      return;
-    }
+      if (!state) return;
 
-    for (const entry of body.entry) {
-      for (const change of entry.changes) {
-        const value = change.value;
-        if (!value.messages) continue;
+      app.log.info({ instanceName, state }, "Evolution connection update");
 
-        const phoneNumberId = value.metadata.phone_number_id;
-        const contactName = value.contacts?.[0]?.profile?.name;
-
-        for (const rawMessage of value.messages) {
-          const parsed = WhatsAppClient.parseIncomingMessage(rawMessage as IncomingMessage);
-          if (!parsed) continue;
-
-          // Fire-and-forget — each message processed independently
-          handleIncomingMessage({
-            parsed,
-            phoneNumberId,
-            contactName,
-            logger: app.log,
-          }).catch((err) => {
-            app.log.error(
-              { err, messageId: parsed.messageId, from: parsed.from },
-              "Unhandled error processing message",
-            );
+      if (state === "open") {
+        // Mark as connected in DB
+        await adminDb
+          .update(whatsappConnections)
+          .set({ status: "connected", updatedAt: new Date() })
+          .where(eq(whatsappConnections.phoneNumberId, instanceName))
+          .catch((err) => {
+            app.log.error({ err, instanceName }, "Failed to update connection status to connected");
           });
-        }
+      } else if (state === "close") {
+        await adminDb
+          .update(whatsappConnections)
+          .set({ status: "disconnected", updatedAt: new Date() })
+          .where(eq(whatsappConnections.phoneNumberId, instanceName))
+          .catch((err) => {
+            app.log.error({ err, instanceName }, "Failed to update connection status to disconnected");
+          });
       }
     }
   });

@@ -6,12 +6,11 @@
  */
 
 import type { FastifyBaseLogger } from "fastify";
-import type { ParsedMessage } from "@zapbot/whatsapp";
+import type { ParsedMessage, SendMessageResult } from "@zapbot/whatsapp";
 import type { BotFlow } from "@zapbot/flow-schema";
-import { WhatsAppClient } from "@zapbot/whatsapp";
+import { EvolutionClient } from "@zapbot/whatsapp";
 import {
   adminDb,
-  decrypt,
   whatsappConnections,
   bots,
   conversations,
@@ -23,13 +22,13 @@ import type { ConversationState, OutgoingMessage } from "./flow-engine.js";
 
 export type MessageHandlerInput = {
   parsed: ParsedMessage;
-  phoneNumberId: string;
+  instanceName: string;
   contactName: string | undefined;
   logger: FastifyBaseLogger;
 };
 
 export async function handleIncomingMessage(input: MessageHandlerInput): Promise<void> {
-  const { parsed, phoneNumberId, contactName, logger } = input;
+  const { parsed, instanceName, contactName, logger } = input;
 
   // 1. Dedup — skip if we already processed this WhatsApp message ID
   const [existing] = await adminDb
@@ -43,20 +42,20 @@ export async function handleIncomingMessage(input: MessageHandlerInput): Promise
     return;
   }
 
-  // 2. Tenant lookup — find account by phone number ID
+  // 2. Tenant lookup — find account by instance name (stored in phoneNumberId column)
   const [connection] = await adminDb
     .select()
     .from(whatsappConnections)
     .where(
       and(
-        eq(whatsappConnections.phoneNumberId, phoneNumberId),
+        eq(whatsappConnections.phoneNumberId, instanceName),
         eq(whatsappConnections.status, "connected"),
       ),
     )
     .limit(1);
 
   if (!connection) {
-    logger.warn({ phoneNumberId }, "No connected WhatsApp account for phone number ID");
+    logger.warn({ instanceName }, "No connected WhatsApp account for instance");
     return;
   }
 
@@ -127,17 +126,17 @@ export async function handleIncomingMessage(input: MessageHandlerInput): Promise
 
   const engineOutput = engine.process(parsed, state);
 
-  // 7. Send responses — decrypt token, create client, dispatch each message
-  const accessToken = decrypt(connection.accessTokenEncrypted);
-  const client = new WhatsAppClient({
-    phoneNumberId: connection.phoneNumberId,
-    accessToken,
+  // 7. Send responses — create Evolution client from env vars + instance name
+  const client = new EvolutionClient({
+    baseUrl: process.env.EVOLUTION_API_URL || "",
+    apiKey: process.env.EVOLUTION_API_KEY || "",
+    instanceName,
   });
 
   for (const msg of engineOutput.messages) {
     try {
       const result = await sendOutgoingMessage(client, parsed.from, msg);
-      const waMessageId = result?.messages?.[0]?.id;
+      const waMessageId = result?.key?.id;
 
       await adminDb.insert(messages).values({
         conversationId: conversation.id,
@@ -164,12 +163,7 @@ export async function handleIncomingMessage(input: MessageHandlerInput): Promise
     })
     .where(eq(conversations.id, conversation.id));
 
-  // 9. Mark as read (fire-and-forget)
-  client.markAsRead(parsed.messageId).catch((err) => {
-    logger.debug({ err }, "Failed to mark message as read (non-critical)");
-  });
-
-  // 10. Log side effects for future implementation
+  // 9. Log side effects for future implementation
   if (engineOutput.sideEffects.length > 0) {
     logger.info(
       { sideEffects: engineOutput.sideEffects, conversationId: conversation.id },
@@ -183,10 +177,10 @@ export async function handleIncomingMessage(input: MessageHandlerInput): Promise
 // ---------------------------------------------------------------------------
 
 async function sendOutgoingMessage(
-  client: WhatsAppClient,
+  client: EvolutionClient,
   to: string,
   msg: OutgoingMessage,
-) {
+): Promise<SendMessageResult | null> {
   switch (msg.type) {
     case "text":
       return client.sendText(to, msg.body);

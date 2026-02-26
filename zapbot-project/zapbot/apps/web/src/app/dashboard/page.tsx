@@ -268,6 +268,57 @@ export default async function DashboardPage() {
         )}
       </div>
 
+      {/* WhatsApp connection card */}
+      <a
+        href="/dashboard/whatsapp"
+        style={{
+          ...styles.card,
+          display: "flex",
+          alignItems: "center",
+          gap: "1rem",
+          textDecoration: "none",
+          cursor: "pointer",
+          transition: "box-shadow 0.2s",
+        }}
+      >
+        <div
+          style={{
+            width: "48px",
+            height: "48px",
+            borderRadius: "12px",
+            backgroundColor: "#25D366",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          <span style={{ color: "#fff", fontSize: "1.5rem", lineHeight: 1 }}>W</span>
+        </div>
+        <div>
+          <p
+            style={{
+              margin: 0,
+              fontWeight: "600",
+              color: "#1a1a1a",
+              fontSize: "1rem",
+            }}
+          >
+            Conectar WhatsApp
+          </p>
+          <p
+            style={{
+              margin: 0,
+              color: "#6b7280",
+              fontSize: "0.8125rem",
+              marginTop: "0.25rem",
+            }}
+          >
+            Configure a conexao do seu WhatsApp Business via QR code.
+          </p>
+        </div>
+      </a>
+
       {/* Bots card */}
       <div style={styles.card}>
         <h2 style={styles.sectionTitle}>Seus bots</h2>

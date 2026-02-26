@@ -36,7 +36,6 @@ vi.mock("@zapbot/db", () => ({
     insert: mockInsert,
     update: mockUpdate,
   },
-  decrypt: vi.fn().mockReturnValue("decrypted-access-token"),
   whatsappConnections: { phoneNumberId: "phone_number_id", status: "status" },
   bots: { accountId: "account_id", status: "status" },
   conversations: { botId: "bot_id", contactPhone: "contact_phone", status: "status", id: "id" },
@@ -44,16 +43,16 @@ vi.mock("@zapbot/db", () => ({
 }));
 
 // ---------------------------------------------------------------------------
-// Mock @zapbot/whatsapp
+// Mock @zapbot/whatsapp — EvolutionClient
 // ---------------------------------------------------------------------------
-const mockSendText = vi.fn().mockResolvedValue({ messages: [{ id: "wamid.out1" }] });
-const mockSendButtons = vi.fn().mockResolvedValue({ messages: [{ id: "wamid.out2" }] });
-const mockSendList = vi.fn().mockResolvedValue({ messages: [{ id: "wamid.out3" }] });
-const mockSendTemplate = vi.fn().mockResolvedValue({ messages: [{ id: "wamid.out4" }] });
+const mockSendText = vi.fn().mockResolvedValue({ key: { id: "evo.out1" } });
+const mockSendButtons = vi.fn().mockResolvedValue({ key: { id: "evo.out2" } });
+const mockSendList = vi.fn().mockResolvedValue({ key: { id: "evo.out3" } });
+const mockSendTemplate = vi.fn().mockResolvedValue(null);
 const mockMarkAsRead = vi.fn().mockResolvedValue(undefined);
 
 vi.mock("@zapbot/whatsapp", () => ({
-  WhatsAppClient: vi.fn().mockImplementation(() => ({
+  EvolutionClient: vi.fn().mockImplementation(() => ({
     sendText: mockSendText,
     sendButtons: mockSendButtons,
     sendList: mockSendList,
@@ -95,7 +94,7 @@ function makeParsedMessage(overrides: Partial<ParsedMessage> = {}): ParsedMessag
     type: "text",
     from: "5511999998888",
     messageId: "wamid.test123",
-    text: "Olá",
+    text: "Ola",
     timestamp: "1700000000",
     ...overrides,
   };
@@ -116,8 +115,8 @@ const fakeLogger = {
 const fakeConnection = {
   id: "conn-1",
   accountId: "acct-1",
-  phoneNumberId: "1234567890",
-  wabaId: "waba-1",
+  phoneNumberId: "zapbot_acct1234",
+  wabaId: "evolution-api",
   accessTokenEncrypted: "encrypted-token",
   webhookVerifyToken: "verify-token",
   displayPhoneNumber: "+5511999998888",
@@ -129,7 +128,7 @@ const fakeConnection = {
 const fakeBotFlow = {
   version: 1,
   startNodeId: "welcome",
-  nodes: [{ id: "welcome", type: "message", content: "Olá!" }],
+  nodes: [{ id: "welcome", type: "message", content: "Ola!" }],
 };
 
 const fakeBot = {
@@ -176,7 +175,7 @@ describe("handleIncomingMessage", () => {
 
     // Default engine output
     mockProcess.mockReturnValue({
-      messages: [{ type: "text", body: "Olá! Bem-vindo!" }],
+      messages: [{ type: "text", body: "Ola! Bem-vindo!" }],
       state: {
         conversationId: "conv-1",
         currentNodeId: "welcome",
@@ -201,7 +200,7 @@ describe("handleIncomingMessage", () => {
 
     await handleIncomingMessage({
       parsed: makeParsedMessage(),
-      phoneNumberId: "1234567890",
+      instanceName: "zapbot_acct1234",
       contactName: "Test User",
       logger: fakeLogger,
     });
@@ -219,7 +218,7 @@ describe("handleIncomingMessage", () => {
 
     await handleIncomingMessage({
       parsed: makeParsedMessage(),
-      phoneNumberId: "unknown-phone",
+      instanceName: "zapbot_unknown",
       contactName: undefined,
       logger: fakeLogger,
     });
@@ -236,7 +235,7 @@ describe("handleIncomingMessage", () => {
 
     await handleIncomingMessage({
       parsed: makeParsedMessage(),
-      phoneNumberId: "1234567890",
+      instanceName: "zapbot_acct1234",
       contactName: "Test",
       logger: fakeLogger,
     });
@@ -259,7 +258,7 @@ describe("handleIncomingMessage", () => {
 
     await handleIncomingMessage({
       parsed: makeParsedMessage(),
-      phoneNumberId: "1234567890",
+      instanceName: "zapbot_acct1234",
       contactName: "New User",
       logger: fakeLogger,
     });
@@ -272,7 +271,7 @@ describe("handleIncomingMessage", () => {
   it("reuses existing active conversation", async () => {
     await handleIncomingMessage({
       parsed: makeParsedMessage(),
-      phoneNumberId: "1234567890",
+      instanceName: "zapbot_acct1234",
       contactName: "Test User",
       logger: fakeLogger,
     });
@@ -304,7 +303,7 @@ describe("handleIncomingMessage", () => {
 
     await handleIncomingMessage({
       parsed: makeParsedMessage(),
-      phoneNumberId: "1234567890",
+      instanceName: "zapbot_acct1234",
       contactName: "Test",
       logger: fakeLogger,
     });
@@ -331,7 +330,7 @@ describe("handleIncomingMessage", () => {
 
     await handleIncomingMessage({
       parsed: makeParsedMessage(),
-      phoneNumberId: "1234567890",
+      instanceName: "zapbot_acct1234",
       contactName: "Maria",
       logger: fakeLogger,
     });
@@ -362,13 +361,13 @@ describe("handleIncomingMessage", () => {
     });
 
     mockSendText
-      .mockResolvedValueOnce({ messages: [{ id: "wamid.1" }] })
+      .mockResolvedValueOnce({ key: { id: "evo.1" } })
       .mockRejectedValueOnce(new Error("API error"))
-      .mockResolvedValueOnce({ messages: [{ id: "wamid.3" }] });
+      .mockResolvedValueOnce({ key: { id: "evo.3" } });
 
     await handleIncomingMessage({
       parsed: makeParsedMessage(),
-      phoneNumberId: "1234567890",
+      instanceName: "zapbot_acct1234",
       contactName: "Test",
       logger: fakeLogger,
     });
@@ -377,16 +376,5 @@ describe("handleIncomingMessage", () => {
     expect(mockSendText).toHaveBeenCalledTimes(3);
     // Conversation state still updated
     expect(updateChain.set).toHaveBeenCalled();
-  });
-
-  it("calls markAsRead as fire-and-forget", async () => {
-    await handleIncomingMessage({
-      parsed: makeParsedMessage(),
-      phoneNumberId: "1234567890",
-      contactName: "Test",
-      logger: fakeLogger,
-    });
-
-    expect(mockMarkAsRead).toHaveBeenCalledWith("wamid.test123");
   });
 });

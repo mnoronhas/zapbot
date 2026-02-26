@@ -4,6 +4,7 @@ import "dotenv/config";
 import accountRoutes from "./routes/account.js";
 import botRoutes from "./routes/bots.js";
 import webhookRoutes from "./routes/webhook.js";
+import waConnectionRoutes from "./routes/whatsapp-connections.js";
 
 const app = Fastify({ logger: true });
 
@@ -17,15 +18,16 @@ await app.register(cors, {
 app.get("/health", async () => ({ status: "ok", timestamp: new Date().toISOString() }));
 
 // ---------------------------------------------------------------------------
-// WhatsApp Webhook — unauthenticated (signature verified internally)
+// Evolution API Webhook — unauthenticated (processes incoming messages)
 // ---------------------------------------------------------------------------
-await app.register(webhookRoutes, { prefix: "/webhooks/whatsapp" });
+await app.register(webhookRoutes, { prefix: "/webhooks/evolution" });
 
 // ---------------------------------------------------------------------------
 // API Routes — authenticated via requireAuth middleware in each route plugin
 // ---------------------------------------------------------------------------
 await app.register(accountRoutes, { prefix: "/api/v1/account" });
 await app.register(botRoutes, { prefix: "/api/v1/bots" });
+await app.register(waConnectionRoutes, { prefix: "/api/v1/whatsapp-connections" });
 
 // ---------------------------------------------------------------------------
 // Start
